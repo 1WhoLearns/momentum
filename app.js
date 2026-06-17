@@ -18,7 +18,7 @@
   var ACCENT = '#7C8C5B';   // sage — FAB, buttons, progress, active tab
   var CHECK  = '#6E7E4C';   // filled check circle
 
-  var STORE_KEY = 'momentum.v2';
+  var STORE_KEY = 'momentum.v3';
 
   // ---------- default sample data ----------
   function defaultState() {
@@ -30,25 +30,11 @@
       detailId: null,
       scrolled: false,
       confetti: false,
-      goals: [
-        { id: 'g1', text: 'Ship the Q3 launch deck', tag: 'Work', done: false },
-        { id: 'g2', text: '30-minute morning run', tag: 'Personal', done: false },
-        { id: 'g3', text: 'Review the design-system PR', tag: 'Work', done: false },
-        { id: 'g4', text: 'Call Mom', tag: 'Personal', done: false }
-      ],
-      // `addedAt` is the day a task was created (YYYY-MM-DD). Incomplete tasks from
-      // earlier days roll over and are flagged "carried over". A few seed tasks are
-      // dated in the past so the rollover behaviour is visible right away.
-      tasks: [
-        { id: 't1', cat: 'A', num: 1, title: 'Finalize launch deck narrative', note: 'Tighten the opening + the ask slide', done: false, addedAt: keyDaysAgo(2) },
-        { id: 't2', cat: 'A', num: 2, title: 'Send the investor update email', note: '', done: false, addedAt: todayKey() },
-        { id: 't3', cat: 'B', num: 1, title: 'Review design-system PR', note: 'Focus on the token changes', done: false, addedAt: keyDaysAgo(1) },
-        { id: 't4', cat: 'B', num: 2, title: 'Draft the sprint retro agenda', note: '', done: false, addedAt: todayKey() },
-        { id: 't5', cat: 'B', num: 5, title: 'Book flights for the team offsite', note: 'Confirm dates with Priya first', done: false, addedAt: keyDaysAgo(3) },
-        { id: 't6', cat: 'C', num: 1, title: 'Reply to newsletter sign-ups', note: '', done: false, addedAt: todayKey() },
-        { id: 't7', cat: 'C', num: 3, title: 'Organize the desktop files', note: '', done: false, addedAt: todayKey() },
-        { id: 't8', cat: 'D', num: 2, title: 'Forward vendor quotes to Ops', note: 'Sam can take it from there', done: false, addedAt: todayKey() }
-      ],
+      // Start empty — no sample data. The user adds their own goals and tasks.
+      goals: [],
+      // Tasks carry an `addedAt` day (YYYY-MM-DD); incomplete tasks from earlier days
+      // roll over to today and get a "carried over" flag.
+      tasks: [],
       // transient sheet fields
       newTaskTitle: '', newTaskCat: 'A', newTaskNum: 1, newTaskNote: '',
       newGoalText: '', newGoalTag: 'Work'
@@ -98,7 +84,6 @@
   function pad2(n) { return n < 10 ? '0' + n : '' + n; }
   function keyOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
   function todayKey() { return keyOf(new Date()); }
-  function keyDaysAgo(n) { var d = new Date(); d.setDate(d.getDate() - n); return keyOf(d); }
   // 'YYYY-MM-DD' strings compare correctly with < , so "before today & not done" = rolled over
   function isRolledOver(t) { return !t.done && !!t.addedAt && t.addedAt < todayKey(); }
   function formatAdded(key, long) {
@@ -278,7 +263,9 @@
         '<div style="margin-top:14px;background:#FFFFFF;border-radius:18px;box-shadow:0 4px 16px rgba(40,44,34,0.05);overflow:hidden;">' +
           (flat.length
             ? taskRows
-            : '<div style="padding:30px 20px;text-align:center;color:#969A8B;font-weight:600;font-size:14px;">No tasks left — you’re all caught up.</div>') +
+            : '<div style="padding:30px 20px;text-align:center;color:#969A8B;font-weight:600;font-size:14px;">' +
+                (s.tasks.length ? 'No tasks left — you’re all caught up.' : 'Tap the + button to add your first task.') +
+              '</div>') +
         '</div>' +
 
       '</div>' +
