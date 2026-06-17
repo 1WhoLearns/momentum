@@ -23,7 +23,7 @@
   // ---------- default sample data ----------
   function defaultState() {
     return {
-      onboarded: false,
+      onboarded: true,       // no intro screen — launch straight into Today
       tab: 'today',          // 'today' | 'done'
       sheet: null,           // 'task' | 'goal' | null
       editingGoalId: null,
@@ -194,12 +194,14 @@
     var headline = total === 0 ? 'Add your first goal'
       : (doneGoals === total ? 'Every goal complete 🎉' : doneGoals + ' of ' + total + ' done');
 
-    var goalRows = s.goals.map(function (g) {
+    // only ACTIVE goals show on Today; completed ones move to the Completed tab
+    var activeGoals = s.goals.filter(function (g) { return !g.done; });
+    var goalRows = activeGoals.map(function (g) {
       return '' +
       '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #E7E8E0;">' +
-        '<button data-action="toggle-goal" data-id="' + g.id + '" style="' + goalCheckStyle(g.done) + '">' + (g.done ? CHECK_SVG : '') + '</button>' +
+        '<button data-action="toggle-goal" data-id="' + g.id + '" style="' + goalCheckStyle(false) + '"></button>' +
         '<button data-action="edit-goal" data-id="' + g.id + '" style="flex:1;text-align:left;border:none;background:none;padding:0;cursor:pointer;">' +
-          '<span style="font-size:16px;font-weight:700;transition:color .18s ease;color:' + (g.done ? '#A9AD9F' : '#23261F') + ';text-decoration:' + (g.done ? 'line-through' : 'none') + ';">' + esc(g.text) + '</span>' +
+          '<span style="font-size:16px;font-weight:700;color:#23261F;">' + esc(g.text) + '</span>' +
         '</button>' +
         '<span style="' + tagPillStyle(g.tag) + '">' + esc(g.tag) + '</span>' +
       '</div>';
@@ -207,9 +209,12 @@
 
     var emptyGoals = total === 0
       ? '<div style="padding:18px 0 26px;text-align:center;color:#969A8B;font-weight:600;font-size:14px;">Set 3–5 goals to anchor your day.</div>'
-      : '';
+      : (activeGoals.length === 0
+        ? '<div style="padding:16px 0 24px;text-align:center;color:#7C8C5B;font-weight:700;font-size:14px;">All your goals are done. 🎉</div>'
+        : '');
 
-    var flat = sortTasks(s.tasks);
+    // only ACTIVE tasks show on Today; completed ones move to the Completed tab
+    var flat = sortTasks(s.tasks.filter(function (t) { return !t.done; }));
     var taskRows = flat.map(function (t, i) {
       var acc = CAT_COLORS[t.cat].accent;
       var rolled = isRolledOver(t);
@@ -270,7 +275,11 @@
           '<div style="font-family:var(--font);font-weight:800;font-size:20px;color:#23261F;">Task List</div>' +
           '<div style="font-size:13px;font-weight:700;color:#969A8B;">' + (activeTasks ? activeTasks + ' to go' : 'Cleared!') + '</div>' +
         '</div>' +
-        '<div style="margin-top:14px;background:#FFFFFF;border-radius:18px;box-shadow:0 4px 16px rgba(40,44,34,0.05);overflow:hidden;">' + taskRows + '</div>' +
+        '<div style="margin-top:14px;background:#FFFFFF;border-radius:18px;box-shadow:0 4px 16px rgba(40,44,34,0.05);overflow:hidden;">' +
+          (flat.length
+            ? taskRows
+            : '<div style="padding:30px 20px;text-align:center;color:#969A8B;font-weight:600;font-size:14px;">No tasks left — you’re all caught up.</div>') +
+        '</div>' +
 
       '</div>' +
     '</div>' +
@@ -481,34 +490,6 @@
   }
 
   // ---------- ONBOARDING ----------
-  function onboarding() {
-    if (state.onboarded) return '';
-    var turtle = '<svg width="48" height="48" viewBox="0 0 100 100" fill="none"><g fill="#fff"><ellipse cx="50" cy="24" rx="11" ry="12.5"></ellipse><path d="M42 48 C30 44 14 36 8 25 C6 22 3 25 4 29 C9 46 26 60 44 62 Z"></path><path d="M58 48 C70 44 86 36 92 25 C94 22 97 25 96 29 C91 46 74 60 56 62 Z"></path><path d="M38 82 C30 86 26 95 31 97 C36 98 41 90 43 84 Z"></path><path d="M62 82 C70 86 74 95 69 97 C64 98 59 90 57 84 Z"></path><path d="M50 88 L45 99 L55 99 Z"></path><path d="M50 36 C68 36 78 49 78 62 C78 76 65 88 50 93 C35 88 22 76 22 62 C22 49 32 36 50 36 Z"></path></g><g stroke="#7C8C5B" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" fill="none"><path d="M50 41 C65 41 73 51 73 62 C73 74 63 84 50 88 C37 84 27 74 27 62 C27 51 35 41 50 41 Z"></path><path d="M50 54 L61 60 L61 70 L50 76 L39 70 L39 60 Z"></path><path d="M50 54 L50 41"></path><path d="M61 60 L71 54"></path><path d="M61 70 L69 77"></path><path d="M50 76 L50 88"></path><path d="M39 70 L31 77"></path><path d="M39 60 L29 54"></path></g></svg>';
-    return '' +
-    '<div style="position:absolute;inset:0;z-index:100;background:#F4F4F0;display:flex;flex-direction:column;padding:96px 30px 40px;">' +
-      '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;">' +
-        '<div style="width:78px;height:78px;border-radius:24px;background:#7C8C5B;display:flex;align-items:center;justify-content:center;box-shadow:0 16px 34px rgba(124,140,91,0.4);margin-bottom:28px;animation:mo-rise .5s ease both;">' + turtle + '</div>' +
-        '<div style="font-family:var(--font);font-weight:700;font-size:42px;line-height:1.02;font-style:italic;color:#23261F;letter-spacing:-0.01em;margin-bottom:12px;animation:mo-rise .5s ease .05s both;">Momentum</div>' +
-        '<div style="font-size:18px;font-weight:700;color:#878C7E;line-height:1.4;max-width:300px;margin-bottom:38px;animation:mo-rise .5s ease .1s both;">Prioritize what matters.</div>' +
-        '<div style="display:flex;flex-direction:column;gap:18px;">' +
-          '<div style="display:flex;align-items:center;gap:15px;animation:mo-rise .5s ease .16s both;">' +
-            '<div style="width:46px;height:46px;border-radius:14px;background:#F2F4ED;border:1px solid #E7E8E0;display:flex;align-items:center;justify-content:center;flex:none;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C8C5B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9 12l2 2 4-4"></path></svg></div>' +
-            '<div><div style="font-weight:800;font-size:16px;color:#23261F;">Set your top goals</div><div style="font-size:14px;font-weight:600;color:#969A8B;">Tag each Personal or Work.</div></div>' +
-          '</div>' +
-          '<div style="display:flex;align-items:center;gap:15px;animation:mo-rise .5s ease .22s both;">' +
-            '<div style="width:46px;height:46px;border-radius:14px;background:#F2F4ED;border:1px solid #E7E8E0;display:flex;align-items:center;justify-content:center;flex:none;font-family:var(--font);font-weight:800;color:#8E86B0;font-size:18px;">A1</div>' +
-            '<div><div style="font-weight:800;font-size:16px;color:#23261F;">Rank every task</div><div style="font-size:14px;font-weight:600;color:#969A8B;">Category A–D, priority 1–10.</div></div>' +
-          '</div>' +
-          '<div style="display:flex;align-items:center;gap:15px;animation:mo-rise .5s ease .28s both;">' +
-            '<div style="width:46px;height:46px;border-radius:14px;background:#F2F4ED;border:1px solid #E7E8E0;display:flex;align-items:center;justify-content:center;flex:none;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A99E8E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"></path></svg></div>' +
-            '<div><div style="font-weight:800;font-size:16px;color:#23261F;">Build daily momentum</div><div style="font-size:14px;font-weight:600;color:#969A8B;">Finish strong, celebrate wins.</div></div>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-      '<button data-action="start" style="width:100%;padding:18px;border:none;border-radius:999px;background:#7C8C5B;color:#fff;font-family:var(--font);font-weight:800;font-size:18px;cursor:pointer;box-shadow:0 12px 28px rgba(124,140,91,0.4);animation:mo-rise .5s ease .34s both;">Get Started</button>' +
-    '</div>';
-  }
-
   // ===================================================================
   //  RENDER + WIRING
   // ===================================================================
@@ -528,8 +509,7 @@
       '</div>' +
       detailOverlay() +
       sheets() +
-      confetti() +
-      onboarding();
+      confetti();
 
     // restore scroll position (avoids jumping to top on every state change)
     var ns = document.getElementById('scroller');
@@ -585,7 +565,6 @@
   }
 
   var ACTIONS = {
-    'start': function () { state.onboarded = true; },
     'go-today': function () { state.tab = 'today'; state.scrolled = false; },
     'go-done': function () { state.tab = 'done'; state.scrolled = false; },
     'open-add-goal': function () { state.sheet = 'goal'; state.editingGoalId = null; state.newGoalText = ''; state.newGoalTag = 'Work'; },

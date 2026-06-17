@@ -1,0 +1,15 @@
+{
+  "name": "Momentum",
+  "short_name": "Momentum",
+  "description": "Prioritize what matters — daily top goals and an A–D / 1–10 task list.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F4F4F0",
+  "theme_color": "#7C8C5B",
+  "icons": [
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

@@ -27,9 +27,11 @@ To see the phone-only, full-screen layout, open your browser's device toolbar
 
 ## Features
 
-- **Onboarding** intro with the sea-turtle logo → **Get Started**.
+- Opens **straight to the Today screen** — no intro/launch screen.
 - **Today** screen: a Top Goals hero (3–5 goals, Personal/Work tags, tap to complete,
   progress bar) and a flat **Task List** with category color rails (A1, A2, B1…).
+- **Completing hides it:** when you check off a goal or a task it disappears from Today
+  and moves to the **Completed** tab (tap its check there to bring it back).
 - **Add Task** sheet (the **+** button): pick category A–D and priority 1–10, with a
   live priority-badge preview.
 - **Add / Edit Goal** sheet (the **Add** button in the hero).
@@ -41,8 +43,16 @@ To see the phone-only, full-screen layout, open your browser's device toolbar
 - **Completed** tab: finished goals and tasks; tap a check to un-complete.
 - **Confetti** when every top goal is done.
 - The large title collapses into the nav bar as you scroll.
+- **Home-screen icon:** the sea-turtle logo (added via Safari → Add to Home Screen).
 
 Your goals and tasks are saved in the browser, so they're still there next time you open it.
+
+## App icon
+
+The turtle icons are generated from `2026-06-17-generate-icon.cjs` (re-runnable; edit the
+color or turtle shape at the top and run `node 2026-06-17-generate-icon.cjs`). It writes
+`apple-touch-icon.png` (home screen), `icon-192.png` / `icon-512.png` (web manifest), and
+`favicon.png` (browser tab). `manifest.json` makes it installable as a full-screen app.
 
 ## Design notes
 
