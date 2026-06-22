@@ -27,6 +27,7 @@
       tab: 'today',          // 'today' | 'done'
       sheet: null,           // 'task' | 'goal' | null
       editingGoalId: null,
+      editingTaskId: null,
       detailId: null,
       scrolled: false,
       confetti: false,
@@ -84,6 +85,7 @@
   function pad2(n) { return n < 10 ? '0' + n : '' + n; }
   function keyOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
   function todayKey() { return keyOf(new Date()); }
+  function todayDateLabel() { return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); }
   // 'YYYY-MM-DD' strings compare correctly with < , so "before today & not done" = rolled over
   function isRolledOver(t) { return !t.done && !!t.addedAt && t.addedAt < todayKey(); }
   function formatAdded(key, long) {
@@ -95,10 +97,22 @@
       : { month: 'short', day: 'numeric' });
   }
 
-  // sorted A→D, then by number
+  // category & priority are OPTIONAL. Uncategorized tasks sort after D; within a
+  // category, tasks with no priority sort after numbered ones.
+  var NEUTRAL = { accent: '#A9AD9F', tint: '#ECECE8' };
+  function catColor(cat) { return CAT_COLORS[cat] || NEUTRAL; }
+  function taskBadge(t) {
+    if (t.cat && t.num) return t.cat + t.num;
+    if (t.cat) return t.cat;
+    if (t.num) return String(t.num);
+    return '';
+  }
   function sortTasks(arr) {
     return arr.slice().sort(function (a, b) {
-      return a.cat < b.cat ? -1 : a.cat > b.cat ? 1 : a.num - b.num;
+      var ca = a.cat || 'Z', cb = b.cat || 'Z';          // uncategorized last
+      if (ca !== cb) return ca < cb ? -1 : 1;
+      var na = a.num == null ? 99 : a.num, nb = b.num == null ? 99 : b.num;
+      return na - nb;
     });
   }
 
@@ -119,7 +133,7 @@
       'background:' + (work ? '#E6EBD7' : '#E9E6F1') + ';color:' + (work ? '#566542' : '#6A6391') + ';';
   }
   function badgeStyle(cat, big) {
-    var c = CAT_COLORS[cat], sz = big ? '52px' : '40px';
+    var c = catColor(cat), sz = big ? '52px' : '40px';
     return 'width:' + sz + ';height:' + sz + ';flex:none;border-radius:' + (big ? '15px' : '12px') + ';' +
       'background:' + c.accent + ';color:#fff;display:flex;align-items:center;justify-content:center;' +
       'font-family:var(--font);font-weight:800;font-size:' + (big ? '19px' : '15px') + ';letter-spacing:.01em;';
@@ -172,7 +186,7 @@
   // ---------- TODAY tab ----------
   function todayTab() {
     var s = state;
-    var dateLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    var dateLabel = todayDateLabel();
     var doneGoals = s.goals.filter(function (g) { return g.done; }).length;
     var total = s.goals.length;
     var pct = total ? Math.round((doneGoals / total) * 100) : 0;
@@ -201,7 +215,7 @@
     // only ACTIVE tasks show on Today; completed ones move to the Completed tab
     var flat = sortTasks(s.tasks.filter(function (t) { return !t.done; }));
     var taskRows = flat.map(function (t, i) {
-      var acc = CAT_COLORS[t.cat].accent;
+      var acc = catColor(t.cat).accent;
       var rolled = isRolledOver(t);
       var rolloverPill = rolled
         ? '<span style="flex:none;display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:800;letter-spacing:.01em;padding:2px 8px;border-radius:999px;background:#ECEAE4;color:#8A7F6E;white-space:nowrap;">↻ ' + esc(formatAdded(t.addedAt, false)) + '</span>'
@@ -215,7 +229,7 @@
       return '' +
       '<div data-action="open-detail" data-id="' + t.id + '" style="display:flex;align-items:center;gap:12px;padding:13px 16px 13px 14px;cursor:pointer;border-top:' + (i === 0 ? 'none' : '1px solid #EDEEE8') + ';">' +
         '<div style="width:4px;height:30px;border-radius:99px;flex:none;transition:background .18s ease;background:' + (t.done ? '#CDD0C5' : acc) + ';"></div>' +
-        '<span style="width:26px;flex:none;font-family:var(--font);font-weight:800;font-size:14px;transition:color .18s ease;color:' + (t.done ? '#A9AD9F' : acc) + ';">' + t.cat + t.num + '</span>' +
+        (taskBadge(t) ? '<span style="width:26px;flex:none;font-family:var(--font);font-weight:800;font-size:14px;transition:color .18s ease;color:' + (t.done ? '#A9AD9F' : acc) + ';">' + taskBadge(t) + '</span>' : '') +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .18s ease;color:' + (t.done ? '#A9AD9F' : '#23261F') + ';text-decoration:' + (t.done ? 'line-through' : 'none') + ';">' + esc(t.title) + '</div>' +
           subline +
@@ -231,14 +245,13 @@
       '<div style="padding:104px 20px 150px;">' +
 
         '<div style="margin-bottom:18px;">' +
-          '<div style="font-family:var(--font);font-weight:700;font-size:34px;line-height:1.05;font-style:italic;color:#23261F;letter-spacing:-0.01em;">Today</div>' +
-          '<div style="font-size:15px;font-weight:700;color:#969A8B;margin-top:3px;">' + esc(dateLabel) + '</div>' +
+          '<h1 style="margin:0;font-family:var(--font);font-weight:700;font-size:34px;line-height:1.05;font-style:italic;color:#23261F;letter-spacing:-0.01em;">' + esc(dateLabel) + '</h1>' +
         '</div>' +
 
         // hero
         '<div style="background:#F2F4ED;border:1px solid #E7E8E0;border-radius:24px;padding:20px 18px 8px;box-shadow:0 10px 30px rgba(40,44,34,0.07);margin-bottom:28px;">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
-            '<div style="font-size:12px;font-weight:800;letter-spacing:0.13em;text-transform:uppercase;color:#7C8C5B;">Top Goals Today</div>' +
+            '<div style="font-size:17px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#7C8C5B;">Top Goals</div>' +
             '<button data-action="open-add-goal" style="border:none;background:rgba(124,140,91,0.12);color:#5E6E40;font-weight:800;font-size:13px;padding:6px 12px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:4px;">' +
               '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5E6E40" stroke-width="3.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>Add' +
             '</button>' +
@@ -256,25 +269,25 @@
         '</div>' +
 
         // master list
-        '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;padding:0 2px;">' +
-          '<div style="font-family:var(--font);font-weight:800;font-size:20px;color:#23261F;">Task List</div>' +
-          '<div style="font-size:13px;font-weight:700;color:#969A8B;">' + (activeTasks ? activeTasks + ' to go' : 'Cleared!') + '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding:0 2px;">' +
+          '<div style="display:flex;align-items:baseline;gap:9px;">' +
+            '<div style="font-family:var(--font);font-weight:800;font-size:20px;color:#23261F;">Task List</div>' +
+            '<div style="font-size:13px;font-weight:700;color:#969A8B;">' + (activeTasks ? activeTasks + ' to go' : 'Cleared!') + '</div>' +
+          '</div>' +
+          '<button data-action="open-add-task" style="border:none;background:rgba(124,140,91,0.12);color:#5E6E40;font-weight:800;font-size:13px;padding:6px 12px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:4px;">' +
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5E6E40" stroke-width="3.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>Add' +
+          '</button>' +
         '</div>' +
         '<div style="margin-top:14px;background:#FFFFFF;border-radius:18px;box-shadow:0 4px 16px rgba(40,44,34,0.05);overflow:hidden;">' +
           (flat.length
             ? taskRows
             : '<div style="padding:30px 20px;text-align:center;color:#969A8B;font-weight:600;font-size:14px;">' +
-                (s.tasks.length ? 'No tasks left — you’re all caught up.' : 'Tap the + button to add your first task.') +
+                (s.tasks.length ? 'No tasks left — you’re all caught up.' : 'Tap “+ Add” to create your first task.') +
               '</div>') +
         '</div>' +
 
       '</div>' +
-    '</div>' +
-
-    // FAB
-    '<button data-action="open-add-task" style="position:absolute;right:20px;bottom:104px;width:60px;height:60px;border-radius:50%;border:none;background:#7C8C5B;box-shadow:0 12px 28px rgba(124,140,91,0.46);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:35;">' +
-      '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>' +
-    '</button>';
+    '</div>';
   }
 
   // ---------- COMPLETED tab ----------
@@ -285,9 +298,9 @@
         return { id: g.id, title: g.text, tag: g.tag, tagStyle: tagPillStyle(g.tag), kind: 'goal' };
       }))
       .concat(sortTasks(s.tasks.filter(function (t) { return t.done; })).map(function (t) {
-        var c = CAT_COLORS[t.cat];
+        var c = catColor(t.cat);
         return {
-          id: t.id, title: t.title, tag: t.cat + t.num, kind: 'task',
+          id: t.id, title: t.title, tag: taskBadge(t), kind: 'task',
           tagStyle: 'flex:none;font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;background:' + c.tint + ';color:' + c.accent + ';'
         };
       }));
@@ -303,7 +316,7 @@
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-size:15px;font-weight:700;color:#9DA193;text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(it.title) + '</div>' +
           '</div>' +
-          '<span style="' + it.tagStyle + '">' + esc(it.tag) + '</span>' +
+          (it.tag ? '<span style="' + it.tagStyle + '">' + esc(it.tag) + '</span>' : '') +
         '</div>';
       }).join('');
       body = '<div style="background:#FFFFFF;border-radius:18px;box-shadow:0 4px 16px rgba(40,44,34,0.05);overflow:hidden;">' + rows + '</div>';
@@ -334,21 +347,27 @@
   function detailOverlay() {
     var dt = state.tasks.filter(function (t) { return t.id === state.detailId; })[0];
     if (!dt) return '';
-    var acc = CAT_COLORS[dt.cat].accent;
+    var acc = catColor(dt.cat).accent;
+    var metaParts = [];
+    if (dt.cat) metaParts.push('Category ' + dt.cat);
+    if (dt.num) metaParts.push('Priority ' + dt.num);
+    var metaLabel = metaParts.join(' · ') || 'No category or priority';
+    var bdg = taskBadge(dt);
     var completeStyle = dt.done
       ? 'width:100%;padding:17px;border:2px solid #CBCEC2;background:transparent;color:#4D5147;font-family:var(--font);font-weight:800;font-size:17px;border-radius:999px;cursor:pointer;'
       : 'width:100%;padding:17px;border:none;background:#6E7E4C;color:#fff;font-family:var(--font);font-weight:800;font-size:17px;border-radius:999px;cursor:pointer;box-shadow:0 10px 24px rgba(110,126,76,0.36);';
     return '' +
     '<div style="position:absolute;inset:0;z-index:70;background:#F4F4F0;animation:mo-push-in .32s cubic-bezier(0.22,1,0.36,1);">' +
-      '<div style="position:absolute;top:0;left:0;right:0;height:96px;z-index:5;display:flex;align-items:flex-end;padding:0 14px 12px;background:rgba(247,241,236,0.82);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border-bottom:1px solid #E3E4DC;">' +
+      '<div style="position:absolute;top:0;left:0;right:0;height:96px;z-index:5;display:flex;align-items:flex-end;justify-content:space-between;padding:0 14px 12px;background:rgba(247,241,236,0.82);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border-bottom:1px solid #E3E4DC;">' +
         '<button data-action="close-detail" style="border:none;background:none;cursor:pointer;display:flex;align-items:center;gap:2px;color:#7C8C5B;font-weight:700;font-size:17px;padding:4px 6px;">' +
-          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C8C5B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>Today' +
+          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C8C5B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>Back' +
         '</button>' +
+        '<button data-action="edit-task" data-id="' + dt.id + '" style="border:none;background:none;cursor:pointer;color:#7C8C5B;font-weight:700;font-size:17px;padding:4px 6px;">Edit</button>' +
       '</div>' +
       '<div style="position:absolute;top:96px;left:0;right:0;bottom:0;overflow-y:auto;padding:22px 22px 40px;">' +
         '<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">' +
-          '<span style="' + badgeStyle(dt.cat, true) + '">' + dt.cat + dt.num + '</span>' +
-          '<div style="font-size:13px;font-weight:800;letter-spacing:0.04em;color:' + acc + ';">Category ' + dt.cat + ' · Priority ' + dt.num + '</div>' +
+          (bdg ? '<span style="' + badgeStyle(dt.cat, true) + '">' + bdg + '</span>' : '') +
+          '<div style="font-size:13px;font-weight:800;letter-spacing:0.04em;color:' + (metaParts.length ? acc : '#969A8B') + ';">' + metaLabel + '</div>' +
         '</div>' +
         '<div style="font-family:var(--font);font-weight:800;font-size:27px;line-height:1.18;color:#23261F;margin-bottom:12px;">' + esc(dt.title) + '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px;">' +
@@ -368,16 +387,19 @@
   // ---------- SHEETS ----------
   function addTaskSheet() {
     var s = state;
+    var editing = !!s.editingTaskId;
     var active = s.newTaskTitle.trim().length > 0;
     var saveStyle = 'border:none;background:none;font-family:var(--font);font-weight:800;font-size:16px;padding:4px;cursor:' +
       (active ? 'pointer' : 'default') + ';color:' + (active ? '#7C8C5B' : '#B4B8AB') + ';';
 
+    // category is OPTIONAL — tapping the selected one again clears it
     var cats = ['A', 'B', 'C', 'D'].map(function (c) {
       var sel = s.newTaskCat === c, acc = CAT_COLORS[c].accent;
       return '<button data-action="pick-cat" data-val="' + c + '" style="flex:1;padding:11px 0;border:none;border-radius:10px;cursor:pointer;font-family:var(--font);font-weight:800;font-size:16px;transition:all .15s ease;' +
         'background:' + (sel ? acc : 'transparent') + ';color:' + (sel ? '#fff' : '#878C7E') + ';box-shadow:' + (sel ? '0 3px 8px rgba(40,44,34,0.14)' : 'none') + ';">' + c + '</button>';
     }).join('');
 
+    // priority is OPTIONAL — tapping the selected one again clears it
     var nums = '';
     for (var n = 1; n <= 10; n++) {
       var sel = s.newTaskNum === n;
@@ -385,26 +407,32 @@
         'background:' + (sel ? '#23261F' : '#FFFFFF') + ';color:' + (sel ? '#fff' : '#878C7E') + ';box-shadow:0 2px 8px rgba(40,44,34,0.06);">' + n + '</button>';
     }
 
+    var previewLabel = taskBadge({ cat: s.newTaskCat, num: s.newTaskNum }) || '–';
+    var removeBtn = editing
+      ? '<button data-action="delete-task" data-id="' + s.editingTaskId + '" style="width:100%;margin-top:22px;padding:15px;border:none;background:none;color:#B5564E;font-weight:800;font-size:16px;cursor:pointer;">Remove Task</button>'
+      : '';
+
     return '' +
     '<div style="position:absolute;left:0;right:0;bottom:0;z-index:90;background:#F4F4F0;border-radius:26px 26px 0 0;box-shadow:0 -16px 44px rgba(40,44,34,0.22);animation:mo-sheet-in .34s cubic-bezier(0.22,1,0.36,1);max-height:86%;display:flex;flex-direction:column;">' +
       '<div style="display:flex;justify-content:center;padding:10px 0 2px;"><div style="width:38px;height:5px;border-radius:999px;background:#CDD0C5;"></div></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 18px 14px;">' +
         '<button data-action="close-sheet" style="border:none;background:none;color:#878C7E;font-weight:700;font-size:16px;cursor:pointer;padding:4px;">Cancel</button>' +
-        '<div style="font-family:var(--font);font-weight:800;font-size:17px;color:#23261F;">New Task</div>' +
-        '<button data-action="save-task" id="saveTaskBtn" style="' + saveStyle + '">Add</button>' +
+        '<div style="font-family:var(--font);font-weight:800;font-size:17px;color:#23261F;">' + (editing ? 'Edit Task' : 'New Task') + '</div>' +
+        '<button data-action="save-task" id="saveTaskBtn" style="' + saveStyle + '">' + (editing ? 'Save' : 'Add') + '</button>' +
       '</div>' +
       '<div style="overflow-y:auto;padding:4px 18px 30px;">' +
         '<input id="taskTitleInput" value="' + esc(s.newTaskTitle) + '" placeholder="What needs doing?" style="width:100%;border:none;background:#FFFFFF;border-radius:14px;padding:16px;font-size:17px;font-weight:700;color:#23261F;box-shadow:0 2px 8px rgba(40,44,34,0.05);margin-bottom:8px;">' +
         '<div style="display:flex;align-items:center;gap:10px;padding:14px 4px 6px;">' +
-          '<span id="livePreviewBadge" style="' + badgeStyle(s.newTaskCat, false) + '">' + s.newTaskCat + s.newTaskNum + '</span>' +
-          '<span style="font-size:13px;font-weight:700;color:#969A8B;">Live priority preview</span>' +
+          '<span id="livePreviewBadge" style="' + badgeStyle(s.newTaskCat, false) + '">' + previewLabel + '</span>' +
+          '<span style="font-size:13px;font-weight:700;color:#969A8B;">Category &amp; priority are optional</span>' +
         '</div>' +
-        '<div style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#A9AD9F;margin:16px 4px 8px;">Category</div>' +
+        '<div style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#A9AD9F;margin:16px 4px 8px;">Category' + (s.newTaskCat ? '' : ' · none') + '</div>' +
         '<div style="display:flex;gap:7px;background:#E9EAE2;padding:5px;border-radius:14px;">' + cats + '</div>' +
-        '<div style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#A9AD9F;margin:20px 4px 10px;">Priority · ' + s.newTaskNum + '</div>' +
+        '<div style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#A9AD9F;margin:20px 4px 10px;">Priority' + (s.newTaskNum ? ' · ' + s.newTaskNum : ' · none') + '</div>' +
         '<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;">' + nums + '</div>' +
         '<div style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#A9AD9F;margin:18px 4px 8px;">Notes</div>' +
         '<input id="taskNoteInput" value="' + esc(s.newTaskNote) + '" placeholder="Add a detail (optional)" style="width:100%;border:none;background:#FFFFFF;border-radius:14px;padding:15px;font-size:15px;font-weight:600;color:#23261F;box-shadow:0 2px 8px rgba(40,44,34,0.05);">' +
+        removeBtn +
       '</div>' +
     '</div>';
   }
@@ -485,7 +513,7 @@
     var savedScroll = scroller ? scroller.scrollTop : 0;
 
     var tabContent = state.tab === 'today' ? todayTab() : doneTab();
-    var navTitle = state.tab === 'done' ? 'Completed' : 'Today';
+    var navTitle = state.tab === 'done' ? 'Completed' : todayDateLabel();
 
     screen.innerHTML =
       statusBar() +
@@ -555,8 +583,9 @@
     'go-today': function () { state.tab = 'today'; state.scrolled = false; },
     'go-done': function () { state.tab = 'done'; state.scrolled = false; },
     'open-add-goal': function () { state.sheet = 'goal'; state.editingGoalId = null; state.newGoalText = ''; state.newGoalTag = 'Work'; },
-    'open-add-task': function () { state.sheet = 'task'; state.newTaskTitle = ''; state.newTaskCat = 'A'; state.newTaskNum = 1; state.newTaskNote = ''; },
-    'close-sheet': function () { state.sheet = null; state.editingGoalId = null; },
+    // category & priority start UNSET (null) — a task can be saved without them
+    'open-add-task': function () { state.sheet = 'task'; state.editingTaskId = null; state.newTaskTitle = ''; state.newTaskCat = null; state.newTaskNum = null; state.newTaskNote = ''; },
+    'close-sheet': function () { state.sheet = null; state.editingGoalId = null; state.editingTaskId = null; },
     'close-detail': function () { state.detailId = null; },
     'open-detail': function (id) { state.detailId = id; },
     'edit-goal': function (id) {
@@ -564,8 +593,15 @@
       if (!g) return;
       state.sheet = 'goal'; state.editingGoalId = id; state.newGoalText = g.text; state.newGoalTag = g.tag;
     },
-    'pick-cat': function (val) { state.newTaskCat = val; },
-    'pick-num': function (val) { state.newTaskNum = parseInt(val, 10); },
+    'edit-task': function (id) {
+      var t = state.tasks.filter(function (x) { return x.id === id; })[0];
+      if (!t) return;
+      state.sheet = 'task'; state.editingTaskId = id; state.detailId = null;
+      state.newTaskTitle = t.title; state.newTaskCat = t.cat || null; state.newTaskNum = t.num || null; state.newTaskNote = t.note || '';
+    },
+    // toggle off if the already-selected chip is tapped again (lets you clear it)
+    'pick-cat': function (val) { state.newTaskCat = (state.newTaskCat === val) ? null : val; },
+    'pick-num': function (val) { var n = parseInt(val, 10); state.newTaskNum = (state.newTaskNum === n) ? null : n; },
     'pick-tag': function (val) { state.newGoalTag = val; },
     'toggle-goal': function (id) {
       state.goals = state.goals.map(function (g) { return g.id === id ? Object.assign({}, g, { done: !g.done }) : g; });
@@ -581,6 +617,8 @@
     'delete-task': function (id) {
       state.tasks = state.tasks.filter(function (t) { return t.id !== id; });
       state.detailId = null;
+      state.sheet = null;
+      state.editingTaskId = null;
       persist();
     },
     'delete-goal': function () {
@@ -591,7 +629,17 @@
     'save-task': function () {
       var title = state.newTaskTitle.trim();
       if (!title) return false;
-      state.tasks = state.tasks.concat([{ id: uid('t'), cat: state.newTaskCat, num: state.newTaskNum, title: title, note: state.newTaskNote.trim(), done: false, addedAt: todayKey() }]);
+      var cat = state.newTaskCat || null;
+      var num = state.newTaskNum || null;
+      var note = state.newTaskNote.trim();
+      if (state.editingTaskId) {
+        state.tasks = state.tasks.map(function (t) {
+          return t.id === state.editingTaskId ? Object.assign({}, t, { title: title, cat: cat, num: num, note: note }) : t;
+        });
+        state.editingTaskId = null;
+      } else {
+        state.tasks = state.tasks.concat([{ id: uid('t'), cat: cat, num: num, title: title, note: note, done: false, addedAt: todayKey() }]);
+      }
       state.sheet = null;
       persist();
     },
