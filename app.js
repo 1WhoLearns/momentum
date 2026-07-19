@@ -86,6 +86,11 @@
   function keyOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
   function todayKey() { return keyOf(new Date()); }
   function todayDateLabel() { return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); }
+  // completedAt is a millisecond timestamp so we can order "most recently completed"
+  function formatCompleted(ts) { return ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''; }
+  function isCompletedToday(item) { return !!(item.done && item.completedAt && keyOf(new Date(item.completedAt)) === todayKey()); }
+  function byCompletedDesc(a, b) { return (b.completedAt || 0) - (a.completedAt || 0); }
+  function activeGoalCount() { return state.goals.filter(function (g) { return !g.done; }).length; }
   // 'YYYY-MM-DD' strings compare correctly with < , so "before today & not done" = rolled over
   function isRolledOver(t) { return !t.done && !!t.addedAt && t.addedAt < todayKey(); }
   function formatAdded(key, long) {
@@ -187,14 +192,10 @@
   function todayTab() {
     var s = state;
     var dateLabel = todayDateLabel();
-    var doneGoals = s.goals.filter(function (g) { return g.done; }).length;
-    var total = s.goals.length;
-    var pct = total ? Math.round((doneGoals / total) * 100) : 0;
-    var headline = total === 0 ? 'Add your first goal'
-      : (doneGoals === total ? 'Every goal complete 🎉' : doneGoals + ' of ' + total + ' done');
-
     // only ACTIVE goals show on Today; completed ones move to the Completed tab
     var activeGoals = s.goals.filter(function (g) { return !g.done; });
+    // whether any goal was finished today decides the empty-state message
+    var doneToday = s.goals.filter(isCompletedToday).length;
     var goalRows = activeGoals.map(function (g) {
       return '' +
       '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #E7E8E0;">' +
@@ -206,11 +207,11 @@
       '</div>';
     }).join('');
 
-    var emptyGoals = total === 0
-      ? '<div style="padding:18px 0 26px;text-align:center;color:#969A8B;font-weight:600;font-size:14px;">Set 3–5 goals to anchor your day.</div>'
-      : (activeGoals.length === 0
+    var emptyGoals = activeGoals.length
+      ? ''
+      : (doneToday > 0
         ? '<div style="padding:16px 0 24px;text-align:center;color:#7C8C5B;font-weight:700;font-size:14px;">All your goals are done. 🎉</div>'
-        : '');
+        : '<div style="padding:18px 0 26px;text-align:center;color:#969A8B;font-weight:600;font-size:14px;">Set 3–5 goals to anchor your day.</div>');
 
     // only ACTIVE tasks show on Today; completed ones move to the Completed tab
     var flat = sortTasks(s.tasks.filter(function (t) { return !t.done; }));
@@ -250,18 +251,11 @@
 
         // hero
         '<div style="background:#F2F4ED;border:1px solid #E7E8E0;border-radius:24px;padding:20px 18px 8px;box-shadow:0 10px 30px rgba(40,44,34,0.07);margin-bottom:28px;">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
             '<div style="font-size:17px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#7C8C5B;">Top Goals</div>' +
             '<button data-action="open-add-goal" style="border:none;background:rgba(124,140,91,0.12);color:#5E6E40;font-weight:800;font-size:13px;padding:6px 12px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:4px;">' +
               '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5E6E40" stroke-width="3.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>Add' +
             '</button>' +
-          '</div>' +
-          '<div style="font-family:var(--font);font-weight:800;font-size:22px;color:#23261F;margin-bottom:14px;">' + esc(headline) + '</div>' +
-          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">' +
-            '<div style="flex:1;height:8px;background:#E7E9E0;border-radius:999px;overflow:hidden;">' +
-              '<div style="width:' + pct + '%;height:100%;background:#7C8C5B;border-radius:999px;transition:width .4s cubic-bezier(0.22,1,0.36,1);"></div>' +
-            '</div>' +
-            '<div style="font-size:12px;font-weight:800;color:#878C7E;white-space:nowrap;">' + doneGoals + '/' + total + '</div>' +
           '</div>' +
           '<div style="display:flex;flex-direction:column;">' + goalRows + '</div>' +
           emptyGoals +
@@ -291,35 +285,56 @@
   }
 
   // ---------- COMPLETED tab ----------
+  // one finished row (goal or task) with a "Completed <date>" line
+  function completedRow(opts, i) {
+    var dateLine = opts.dateLabel
+      ? '<div style="font-size:12px;font-weight:700;color:#A9AD9F;margin-top:2px;">Completed ' + esc(opts.dateLabel) + '</div>'
+      : '';
+    return '' +
+    '<div style="display:flex;align-items:center;gap:13px;padding:13px 15px;border-top:' + (i === 0 ? 'none' : '1px solid #EDEEE8') + ';">' +
+      '<button data-action="' + opts.action + '" data-id="' + opts.id + '" style="width:24px;height:24px;border-radius:50%;border:none;background:#6E7E4C;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;">' + CHECK_SVG_SM + '</button>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:15px;font-weight:700;color:#9DA193;text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(opts.title) + '</div>' +
+        dateLine +
+      '</div>' +
+      (opts.tag ? '<span style="' + opts.tagStyle + '">' + esc(opts.tag) + '</span>' : '') +
+    '</div>';
+  }
+
+  function completedSection(label, rowsHtml, marginTop) {
+    return '<div style="font-size:14px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#7C8C5B;margin:' + marginTop + ' 2px 10px;">' + label + '</div>' +
+      '<div style="background:#FFFFFF;border-radius:18px;box-shadow:0 4px 16px rgba(40,44,34,0.05);overflow:hidden;">' + rowsHtml + '</div>';
+  }
+
   function doneTab() {
     var s = state;
-    var items = []
-      .concat(s.goals.filter(function (g) { return g.done; }).map(function (g) {
-        return { id: g.id, title: g.text, tag: g.tag, tagStyle: tagPillStyle(g.tag), kind: 'goal' };
-      }))
-      .concat(sortTasks(s.tasks.filter(function (t) { return t.done; })).map(function (t) {
-        var c = catColor(t.cat);
-        return {
-          id: t.id, title: t.title, tag: taskBadge(t), kind: 'task',
-          tagStyle: 'flex:none;font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;background:' + c.tint + ';color:' + c.accent + ';'
-        };
-      }));
+    var doneGoalsAll = s.goals.filter(function (g) { return g.done; });
+    var doneTasksAll = s.tasks.filter(function (t) { return t.done; });
+    var total = doneGoalsAll.length + doneTasksAll.length;
 
-    var summary = items.length ? items.length + ' finished today' : 'Your wins will appear here';
+    // show the 5 most recently completed goals and 10 most recently completed tasks
+    var recentGoals = doneGoalsAll.slice().sort(byCompletedDesc).slice(0, 5);
+    var recentTasks = doneTasksAll.slice().sort(byCompletedDesc).slice(0, 10);
+
+    var goalRows = recentGoals.map(function (g, i) {
+      return completedRow({ id: g.id, action: 'toggle-goal', title: g.text, tag: g.tag, tagStyle: tagPillStyle(g.tag), dateLabel: formatCompleted(g.completedAt) }, i);
+    }).join('');
+    var taskRows = recentTasks.map(function (t, i) {
+      var c = catColor(t.cat);
+      return completedRow({ id: t.id, action: 'toggle-task', title: t.title, tag: taskBadge(t),
+        tagStyle: 'flex:none;font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px;background:' + c.tint + ';color:' + c.accent + ';',
+        dateLabel: formatCompleted(t.completedAt) }, i);
+    }).join('');
 
     var body;
-    if (items.length) {
-      var rows = items.map(function (it, i) {
-        return '' +
-        '<div style="display:flex;align-items:center;gap:13px;padding:14px 15px;border-top:' + (i === 0 ? 'none' : '1px solid #EDEEE8') + ';">' +
-          '<button data-action="' + (it.kind === 'goal' ? 'toggle-goal' : 'toggle-task') + '" data-id="' + it.id + '" style="width:24px;height:24px;border-radius:50%;border:none;background:#6E7E4C;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;">' + CHECK_SVG_SM + '</button>' +
-          '<div style="flex:1;min-width:0;">' +
-            '<div style="font-size:15px;font-weight:700;color:#9DA193;text-decoration:line-through;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(it.title) + '</div>' +
-          '</div>' +
-          (it.tag ? '<span style="' + it.tagStyle + '">' + esc(it.tag) + '</span>' : '') +
-        '</div>';
+    if (total) {
+      // hide a section's header when it has nothing; first shown section gets a tighter top margin
+      var secs = [];
+      if (recentGoals.length) secs.push({ label: 'Top Goals', rows: goalRows });
+      if (recentTasks.length) secs.push({ label: 'Task List', rows: taskRows });
+      body = secs.map(function (sec, i) {
+        return completedSection(sec.label, sec.rows, i === 0 ? '6px' : '24px');
       }).join('');
-      body = '<div style="background:#FFFFFF;border-radius:18px;box-shadow:0 4px 16px rgba(40,44,34,0.05);overflow:hidden;">' + rows + '</div>';
     } else {
       body = '' +
       '<div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:70px 30px;">' +
@@ -330,6 +345,8 @@
         '<div style="font-size:14px;font-weight:600;color:#969A8B;max-width:220px;">Check off a goal or task and it’ll land here.</div>' +
       '</div>';
     }
+
+    var summary = total ? total + ' completed' : 'Your wins will appear here';
 
     return '' +
     '<div class="scroller" id="scroller" style="position:absolute;top:0;left:0;right:0;bottom:0;overflow-y:auto;">' +
@@ -440,7 +457,7 @@
   function addGoalSheet() {
     var s = state;
     var editing = !!s.editingGoalId;
-    var active = s.newGoalText.trim().length > 0 && (editing || s.goals.length < 5);
+    var active = s.newGoalText.trim().length > 0 && (editing || activeGoalCount() < 5);
     var saveStyle = 'border:none;background:none;font-family:var(--font);font-weight:800;font-size:16px;padding:4px;cursor:' +
       (active ? 'pointer' : 'default') + ';color:' + (active ? '#7C8C5B' : '#B4B8AB') + ';';
 
@@ -453,8 +470,8 @@
     var removeBtn = editing
       ? '<button data-action="delete-goal" style="width:100%;margin-top:22px;padding:15px;border:none;background:none;color:#B5564E;font-weight:800;font-size:16px;cursor:pointer;">Remove Goal</button>'
       : '';
-    var limit = (!editing && s.goals.length >= 5)
-      ? '<div style="margin-top:18px;text-align:center;font-size:13px;font-weight:700;color:#969A8B;">You’ve hit 5 goals — the daily sweet spot.</div>'
+    var limit = (!editing && activeGoalCount() >= 5)
+      ? '<div style="margin-top:18px;text-align:center;font-size:13px;font-weight:700;color:#969A8B;">5 active goals is the max — complete one to add another.</div>'
       : '';
 
     return '' +
@@ -563,7 +580,7 @@
       gt.addEventListener('input', function (e) {
         state.newGoalText = e.target.value;
         var btn = document.getElementById('saveGoalBtn');
-        var active = state.newGoalText.trim().length > 0 && (state.editingGoalId || state.goals.length < 5);
+        var active = state.newGoalText.trim().length > 0 && (state.editingGoalId || activeGoalCount() < 5);
         if (btn) { btn.style.color = active ? '#7C8C5B' : '#B4B8AB'; btn.style.cursor = active ? 'pointer' : 'default'; }
       });
     }
@@ -571,7 +588,10 @@
 
   // ---------- actions ----------
   function celebrateIfDone() {
-    if (state.goals.length && state.goals.every(function (g) { return g.done; })) {
+    // celebrate when no active goals remain but at least one was completed today
+    var active = state.goals.filter(function (g) { return !g.done; }).length;
+    var doneToday = state.goals.filter(isCompletedToday).length;
+    if (active === 0 && doneToday > 0) {
       state.confetti = true;
       render();
       clearTimeout(confettiTimer);
@@ -604,14 +624,22 @@
     'pick-num': function (val) { var n = parseInt(val, 10); state.newTaskNum = (state.newTaskNum === n) ? null : n; },
     'pick-tag': function (val) { state.newGoalTag = val; },
     'toggle-goal': function (id) {
-      state.goals = state.goals.map(function (g) { return g.id === id ? Object.assign({}, g, { done: !g.done }) : g; });
+      state.goals = state.goals.map(function (g) {
+        if (g.id !== id) return g;
+        var done = !g.done;
+        return Object.assign({}, g, { done: done, completedAt: done ? Date.now() : null });
+      });
       persist();
       render();
       celebrateIfDone();
       return true; // handled render
     },
     'toggle-task': function (id) {
-      state.tasks = state.tasks.map(function (t) { return t.id === id ? Object.assign({}, t, { done: !t.done }) : t; });
+      state.tasks = state.tasks.map(function (t) {
+        if (t.id !== id) return t;
+        var done = !t.done;
+        return Object.assign({}, t, { done: done, completedAt: done ? Date.now() : null });
+      });
       persist();
     },
     'delete-task': function (id) {
@@ -650,7 +678,7 @@
         state.goals = state.goals.map(function (g) { return g.id === state.editingGoalId ? Object.assign({}, g, { text: text, tag: state.newGoalTag }) : g; });
         state.editingGoalId = null;
       } else {
-        if (state.goals.length >= 5) return false;
+        if (activeGoalCount() >= 5) return false;   // cap on ACTIVE goals only
         state.goals = state.goals.concat([{ id: uid('g'), text: text, tag: state.newGoalTag, done: false }]);
       }
       state.sheet = null;
